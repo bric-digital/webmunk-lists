@@ -1,0 +1,51 @@
+{
+    "name": "@bric/webmunk-lists",
+    "version": "0.0.1",
+    "description": "Webmunk module for domain list management (blocking, allowing, categorization) with IndexedDB storage.",
+    "keywords": [
+        "extension",
+        "webmunk",
+        "lists",
+        "blocking",
+        "filtering"
+    ],
+    "author": "Behavioral Research Innovation Center",
+    "type": "module",
+    "homepage": "https://github.com/bric-digital/webmunk-lists",
+    "bugs": {
+        "url": "https://github.com/bric-digital/webmunk-lists/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/bric-digital/webmunk-lists.git"
+    },
+    "exports": {
+        ".": "./src/list-utilities.mts"
+    },
+    "scripts": {
+        "build": "tsc",
+        "lint": "eslint src",
+        "pretest": "node tests/scripts/build-test-bundle.js",
+        "test": "playwright test",
+        "test:ci": "playwright test --reporter=dot",
+        "test:debug": "playwright test --debug",
+        "test:headed": "playwright test --headed",
+        "test:ui": "playwright test --ui",
+        "test:unit": "playwright test specs/"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.39.2",
+        "@playwright/test": "^1.48.0",
+        "@types/psl": "^1.1.3",
+        "chrome-types": "^0.1.404",
+        "esbuild": "^0.27.2",
+        "eslint": "^9.39.2",
+        "globals": "^16.5.0",
+        "jiti": "^2.6.1",
+        "typescript": "^5.9.2",
+        "typescript-eslint": "^8.52.0"
+    },
+    "dependencies": {
+        "psl": "^1.15.0"
+    }
+}

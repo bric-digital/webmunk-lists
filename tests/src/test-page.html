@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>List Utilities Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #555;
+            margin-top: 30px;
+            border-left: 4px solid #2196F3;
+            padding-left: 10px;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .success {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            color: #721c24;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            color: #0c5460;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            text-align: center;
+            font-size: 16px;
+            margin: 10px 5px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            border: 1px solid #ddd;
+        }
+        .button-group {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        #output {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Webmunk List Utilities Test Suite</h1>
+
+    <div class="test-section">
+        <h2>Test Controls</h2>
+        <div class="button-group">
+            <button onclick="runAllTests()">Run All Tests</button>
+            <button onclick="clearOutput()">Clear Output</button>
+            <button onclick="resetDatabase()">Reset Database</button>
+        </div>
+
+        <h3>Individual Tests</h3>
+        <div class="button-group">
+            <button onclick="testDatabaseInit()">Test 1: Database Init</button>
+            <button onclick="testCreateEntry()">Test 2: Create Entry</button>
+            <button onclick="testGetEntries()">Test 3: Get Entries</button>
+            <button onclick="testUpdateEntry()">Test 4: Update Entry</button>
+            <button onclick="testDeleteEntry()">Test 5: Delete Entry</button>
+            <button onclick="testBulkOperations()">Test 6: Bulk Operations</button>
+            <button onclick="testPatternMatching()">Test 7: Pattern Matching</button>
+            <button onclick="testExportImport()">Test 8: Export/Import</button>
+            <button onclick="testDuplicateHandling()">Test 9: Duplicate Handling</button>
+        </div>
+    </div>
+
+    <div id="output"></div>
+
+    <script type="module">
+        // Import the bundled list utilities
+        import * as ListUtilities from './build/list-utilities.bundle.js';
+
+        // Expose utilities to window for Playwright tests
+        window.ListUtilities = ListUtilities;
+
+        // Helper function to clear the database
+        window.clearDatabase = async function() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.deleteDatabase('webmunk_lists');
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+                request.onblocked = () => {
+                    console.warn('Database deletion blocked');
+                    // Still resolve after a short delay
+                    setTimeout(resolve, 100);
+                };
+            });
+        };
+
+        // Signal that test utilities are ready
+        window.testUtilitiesReady = true;
+
+        // Test state for interactive testing
+        window.testState = {
+            lastCreatedId: null,
+            testListName: 'test-list'
+        };
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function clearOutput() {
+            document.getElementById('output').innerHTML = '';
+        }
+
+        async function resetDatabase() {
+            try {
+                await window.clearDatabase();
+                log('Database deleted successfully', 'success');
+                window.testState = {
+                    lastCreatedId: null,
+                    testListName: 'test-list'
+                };
+            } catch (error) {
+                log(`Error resetting database: ${error.message}`, 'error');
+            }
+        }
+
+        // ===================================================================
+        // Test Functions
+        // ===================================================================
+
+        async function testDatabaseInit() {
+            log('Starting Test 1: Database Initialization', 'info');
+            try {
+                const db = await ListUtilities.initializeListDatabase();
+                log(`Database initialized: ${db.name}`, 'success');
+                log(`Database version: ${db.version}`, 'info');
+                
+                const transaction = db.transaction('list_entries', 'readonly');
+                const store = transaction.objectStore('list_entries');
+                log(`Object store: ${store.name}`, 'info');
+                log(`Key path: ${store.keyPath}`, 'info');
+                log(`Indexes: ${Array.from(store.indexNames).join(', ')}`, 'info');
+                
+                log('Test 1: ✅ PASSED', 'success');
+            } catch (error) {
+                log(`Test 1 Failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testCreateEntry() {
+            log('Starting Test 2: Create Entry', 'info');
+            try {
+                const id = await ListUtilities.createListEntry({
+                    list_name: window.testState.testListName,
+                    domain: 'example.com',
+                    pattern_type: 'domain',
+                    metadata: {
+                        category: 'test',
+                        description: 'Test domain'
+                    }
+                });
+                window.testState.lastCreatedId = id;
+                log(`Created entry with ID: ${id}`, 'success');
+                log('Test 2: ✅ PASSED', 'success');
+            } catch (error) {
+                log(`Test 2 Failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testGetEntries() {
+            log('Starting Test 3: Get Entries', 'info');
+            try {
+                const entries = await ListUtilities.getListEntries(window.testState.testListName);
+                log(`Retrieved ${entries.length} entries`, 'info');
+                entries.forEach(entry => {
+                    log(`- ${entry.domain} (${entry.pattern_type})`, 'info');
+                });
+                log('Test 3: ✅ PASSED', 'success');
+            } catch (error) {
+                log(`Test 3 Failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testUpdateEntry() {
+            log('Starting Test 4: Update Entry', 'info');
+            try {
+                if (!window.testState.lastCreatedId) {
+                    log('No entry to update. Run Test 2 first.', 'error');
+                    return;
+                }
+                await ListUtilities.updateListEntry(window.testState.lastCreatedId, {
+                    metadata: {
+                        category: 'updated',
+                        description: 'Updated test domain'
+                    }
+                });
+                log(`Updated entry ID: ${window.testState.lastCreatedId}`, 'success');
+                log('Test 4: ✅ PASSED', 'success');
+            } catch (error) {
+                log(`Test 4 Failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testDeleteEntry() {
+            log('Starting Test 5: Delete Entry', 'info');
+            try {
+                if (!window.testState.lastCreatedId) {
+                    log('No entry to delete. Run Test 2 first.', 'error');
+                    return;
+                }
+                await ListUtilities.deleteListEntry(window.testState.lastCreatedId);
+                log(`Deleted entry ID: ${window.testState.lastCreatedId}`, 'success');
+                window.testState.lastCreatedId = null;
+                log('Test 5: ✅ PASSED', 'success');
+            } catch (error) {
+                log(`Test 5 Failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testBulkOperations() {
+            log('Starting Test 6: Bulk Operations', 'info');
+            try {
+                const entries = [
+                    { list_name: 'bulk-test', domain: 'site1.com', pattern_type: 'domain', metadata: {} },
+                    { list_name: 'bulk-test', domain: 'site2.com', pattern_type: 'domain', metadata: {} },
+                    { list_name: 'bulk-test', domain: 'site3.com', pattern_type: 'domain', metadata: {} }
+                ];
+                const ids = await ListUtilities.bulkCreateListEntries(entries);
+                log(`Created ${ids.length} entries in bulk`, 'success');
+                
+                const retrieved = await ListUtilities.getListEntries('bulk-test');
+                log(`Retrieved ${retrieved.length} entries from bulk-test list`, 'info');
+                
+                log('Test 6: ✅ PASSED', 'success');
+            } catch (error) {
+                log(`Test 6 Failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testPatternMatching() {
+            log('Starting Test 7: Pattern Matching', 'info');
+            try {
+                const tests = [
+                    { url: 'https://www.google.com/search', pattern: 'google.com', type: 'domain', expected: true },
+                    { url: 'https://mail.google.com', pattern: 'google.com', type: 'domain', expected: true },
+                    { url: 'https://facebook.com', pattern: 'google.com', type: 'domain', expected: false },
+                    { url: 'https://example.com/test', pattern: 'https://example.com/test', type: 'exact_url', expected: true },
+                ];
+
+                let passed = 0;
+                let failed = 0;
+
+                for (const test of tests) {
+                    const result = ListUtilities.matchesPattern(test.url, test.pattern, test.type);
+                    if (result === test.expected) {
+                        log(`✓ ${test.url} vs ${test.pattern} (${test.type}): ${result}`, 'success');
+                        passed++;
+                    } else {
+                        log(`✗ ${test.url} vs ${test.pattern} (${test.type}): expected ${test.expected}, got ${result}`, 'error');
+                        failed++;
+                    }
+                }
+
+                log(`Pattern matching: ${passed} passed, ${failed} failed`, failed > 0 ? 'error' : 'success');
+                if (failed === 0) {
+                    log('Test 7: ✅ PASSED', 'success');
+                }
+            } catch (error) {
+                log(`Test 7 Failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testExportImport() {
+            log('Starting Test 8: Export/Import', 'info');
+            try {
+                // Create a test list
+                await ListUtilities.createListEntry({
+                    list_name: 'export-test',
+                    domain: 'exportable.com',
+                    pattern_type: 'domain',
+                    metadata: { category: 'export' }
+                });
+
+                // Export
+                const exported = await ListUtilities.exportList('export-test');
+                log('Exported list:', 'info');
+                log(`<pre>${exported}</pre>`, 'info');
+
+                // Delete and reimport
+                await ListUtilities.deleteAllEntriesInList('export-test');
+                const count = await ListUtilities.importList('export-test', exported);
+                log(`Imported ${count} entries`, 'success');
+
+                log('Test 8: ✅ PASSED', 'success');
+            } catch (error) {
+                log(`Test 8 Failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testDuplicateHandling() {
+            log('Starting Test 9: Duplicate Handling', 'info');
+            try {
+                // Create first entry
+                await ListUtilities.createListEntry({
+                    list_name: 'dup-test',
+                    domain: 'duplicate.com',
+                    pattern_type: 'domain',
+                    metadata: {}
+                });
+                log('Created first entry', 'info');
+
+                // Try to create duplicate
+                try {
+                    await ListUtilities.createListEntry({
+                        list_name: 'dup-test',
+                        domain: 'duplicate.com',
+                        pattern_type: 'domain',
+                        metadata: {}
+                    });
+                    log('ERROR: Duplicate entry was allowed!', 'error');
+                } catch (dupError) {
+                    log('Duplicate correctly rejected: ' + dupError.message, 'success');
+                    log('Test 9: ✅ PASSED', 'success');
+                }
+            } catch (error) {
+                log(`Test 9 Failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function runAllTests() {
+            clearOutput();
+            log('🚀 Starting Full Test Suite', 'info');
+            log('='.repeat(60), 'info');
+
+            await resetDatabase();
+            await testDatabaseInit();
+            await testCreateEntry();
+            await testGetEntries();
+            await testUpdateEntry();
+            await testDeleteEntry();
+            await testBulkOperations();
+            await testPatternMatching();
+            await testExportImport();
+            await testDuplicateHandling();
+
+            log('='.repeat(60), 'info');
+            log('✅ Test Suite Complete', 'success');
+        }
+
+        // Make functions available globally
+        window.testDatabaseInit = testDatabaseInit;
+        window.testCreateEntry = testCreateEntry;
+        window.testGetEntries = testGetEntries;
+        window.testUpdateEntry = testUpdateEntry;
+        window.testDeleteEntry = testDeleteEntry;
+        window.testBulkOperations = testBulkOperations;
+        window.testPatternMatching = testPatternMatching;
+        window.testExportImport = testExportImport;
+        window.testDuplicateHandling = testDuplicateHandling;
+        window.runAllTests = runAllTests;
+        window.clearOutput = clearOutput;
+        window.resetDatabase = resetDatabase;
+
+        // Initial message
+        log('✅ Test suite loaded and ready!', 'success');
+        log('Click "Run All Tests" to begin, or run individual tests.', 'info');
+    </script>
+</body>
+</html>
