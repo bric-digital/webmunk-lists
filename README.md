@@ -1,6 +1,8 @@
 # @bric/webmunk-lists
 
-Domain list management for Webmunk extensions. Provides IndexedDB-based storage and matching for blocking, allowing, and categorization of domains.
+Domain list management for Webmunk extensions. Provides IndexedDB-based storage and matching for blocking, allowing, and categorization of URLs.
+
+Note: This moduel is currently optimized for lists related to the webmunk-history module, however, the plan for the future is for this to be a more general module for managing lists.
 
 ## Features
 
@@ -33,8 +35,9 @@ import {
 
 ### Pattern Types
 
-All patterns are matched against a full URL string (e.g., `https://www.google.com/maps?q=1`).
-Note: the field is named `domain`, but for non-`domain` types it stores the pattern string.
+All patterns are matched against a full URL string e.g., `https://www.google.com/maps?q=1`. The parts of a url are protocol://subdomain.second-level-domain.top-level-domain/path?query-string. In the example the protocol is https, the subdomain is www and so on.
+
+Note: the field is named `domain`, but for non-`domain` types it stores the pattern (regex) string.
 
 - **domain**: Matches the registrable domain (eTLD+1). Subdomains are not allowed in the pattern.
   - Pattern must be just a domain (no scheme or path).
