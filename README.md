@@ -33,11 +33,77 @@ import {
 
 ### Pattern Types
 
-- **domain**: Matches registered domain (e.g., "google.com" matches "www.google.com", "mail.google.com")
-- **host**: Matches exact hostname including subdomain (e.g., "mail.google.com" only)
-- **exact_url**: Matches the complete URL exactly
-- **host_path_prefix**: Matches host and path prefix (e.g., "google.com/maps")
-- **regex**: Matches using regular expression
+All patterns are matched against a full URL string (e.g., `https://www.google.com/maps?q=1`).
+Note: the field is named `domain`, but for non-`domain` types it stores the pattern string.
+
+- **domain**: Matches the registrable domain (eTLD+1). Subdomains are not allowed in the pattern.
+  - Pattern must be just a domain (no scheme or path).
+  - Example pattern: `google.com`
+  - Matches: `https://www.google.com/maps`, `http://mail.google.com/inbox`
+  - Does not match: `https://google.co.uk`, `https://example.com`
+  - Note: a pattern like `mail.google.com` is invalid for `domain` and should use `host` instead.
+- **host**: Matches the exact hostname (subdomain included). Leading `www.` is normalized away.
+  - Pattern can be `mail.google.com`, `mail.google.com/anything`, or `https://mail.google.com/anything` (host is extracted).
+  - Example pattern: `mail.google.com`
+  - Matches: `https://mail.google.com/inbox`
+  - Does not match: `https://www.google.com`, `https://google.com`
+- **exact_url**: Matches the full URL string exactly (scheme, host, path, query, fragment).
+  - Example pattern: `https://example.com/login?next=/home`
+  - Matches only that exact URL string.
+- **host_path_prefix**: Matches host + path prefix (query string is ignored).
+  - Pattern can be `example.com/maps` or `https://example.com/maps`.
+  - Example pattern: `example.com/maps`
+  - Matches: `https://www.example.com/maps`, `https://example.com/maps/dir`
+  - Does not match: `https://example.com/map` (prefix mismatch)
+- **regex**: JavaScript regular expression applied to the full URL string.
+  - Example pattern: `^https://(www\.)?example\.com/.*`
+  - Matches any `https://example.com/...` or `https://www.example.com/...`
+
+### Config Format (Backend Sync)
+
+`syncListsFromConfig()` expects a JSON object with a top-level `lists` field. Each key is a list
+name, and each value is an array of entries. Each entry must include `domain` (the pattern string)
+and `pattern_type`. `metadata` is optional and can include any extra fields.
+
+Example configuration:
+
+```json
+{
+  "lists": {
+    "blocklist": [
+      {
+        "domain": "example.com",
+        "pattern_type": "domain",
+        "metadata": { "category": "blocked", "description": "All of example.com" }
+      },
+      {
+        "domain": "mail.example.com",
+        "pattern_type": "host",
+        "metadata": { "category": "blocked" }
+      },
+      {
+        "domain": "https://example.com/login",
+        "pattern_type": "exact_url"
+      },
+      {
+        "domain": "example.com/maps",
+        "pattern_type": "host_path_prefix"
+      },
+      {
+        "domain": "^https://(www\\.)?example\\.com/.*",
+        "pattern_type": "regex"
+      }
+    ],
+    "allowlist": [
+      {
+        "domain": "docs.example.com",
+        "pattern_type": "host",
+        "metadata": { "category": "allowed" }
+      }
+    ]
+  }
+}
+```
 
 ### Basic Operations
 
