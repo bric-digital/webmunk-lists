@@ -490,6 +490,9 @@ export async function findListEntryByPattern(
 export async function matchDomainAgainstList(url: string, listName: string): Promise<ListEntry | null> {
   const entries = await getListEntries(listName)
 
+  console.log(`[webmunk-lists] matchDomainAgainstList`)
+  console.log(entries)
+
   for (const entry of entries) {
     if (matchesPattern(url, entry.domain, entry.pattern_type)) {
       return entry
