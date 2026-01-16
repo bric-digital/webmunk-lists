@@ -781,6 +781,8 @@ export function matchesPattern(url: string, pattern: string, patternType: Patter
     const urlObj = new URL(url)
     const hostname = urlObj.hostname
 
+    console.log(`[webmunk-lists] matchesPattern("${url}", "${pattern}", "${patternType}")`)
+
     switch (patternType) {
       case 'domain': {
         // Strict registered-domain match (eTLD+1).
