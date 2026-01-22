@@ -538,13 +538,30 @@ export async function matchDomainAgainstList(url: string, listName: string): Pro
 export async function bulkCreateListEntries(entries: Omit<ListEntry, 'id'>[]): Promise<number[]> {
   const db = await getDatabase()
 
+  // Check for duplicates within the entries array being inserted
+  const uniqueKeys = new Set<string>()
+  const duplicatesInArray: Array<{ index: number, key: string }> = []
+  
+  entries.forEach((entry, index) => {
+    const key = `${entry.list_name}:${entry.pattern_type}:${entry.domain}`
+    if (uniqueKeys.has(key)) {
+      duplicatesInArray.push({ index, key })
+    }
+    uniqueKeys.add(key)
+  })
+
+  if (duplicatesInArray.length > 0) {
+    console.error('[list-utilities] Duplicate entries detected in bulk insert array:', duplicatesInArray)
+    return Promise.reject(new Error(`Duplicate entries in array: ${duplicatesInArray.map(d => `[${d.index}]${d.key}`).join(', ')}`))
+  }
+
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readwrite')
     const store = transaction.objectStore(STORE_NAME)
     const ids: number[] = []
     let completed = 0
 
-    entries.forEach((entry) => {
+    entries.forEach((entry, index) => {
       const entryWithTimestamps = {
         ...entry,
         metadata: {
@@ -566,7 +583,16 @@ export async function bulkCreateListEntries(entries: Omit<ListEntry, 'id'>[]): P
       }
 
       request.onerror = () => {
-        reject(new Error(`Failed to create bulk entry: ${request.error?.message}`))
+        const errorDetails = {
+          list_name: entry.list_name,
+          pattern_type: entry.pattern_type,
+          domain: entry.domain,
+          source: entry.source,
+          index,
+          error: request.error?.message
+        }
+        console.error('[list-utilities] Bulk insert failed at entry:', errorDetails)
+        reject(new Error(`Failed to create bulk entry at index ${index} (${entry.list_name}:${entry.pattern_type}:${entry.domain}): ${request.error?.message}`))
       }
     })
 
@@ -591,7 +617,6 @@ export async function bulkDeleteListEntries(ids: number[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readwrite')
     const store = transaction.objectStore(STORE_NAME)
-    let completed = 0
 
     transaction.oncomplete = () => {
       resolve()
@@ -603,10 +628,6 @@ export async function bulkDeleteListEntries(ids: number[]): Promise<void> {
 
     ids.forEach((id) => {
       const request = store.delete(id)
-
-      request.onsuccess = () => {
-        completed++
-      }
 
       request.onerror = () => {
         reject(new Error(`Failed to delete entry ${id}: ${request.error?.message}`))
