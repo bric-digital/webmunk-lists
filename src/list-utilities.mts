@@ -429,6 +429,34 @@ export async function deleteAllEntriesInList(
   })
 }
 
+/**
+ * Reset the entire list database
+ * This completely deletes the database and requires reinitialization
+ * Use when you need to clear all data and schema (useful for testing or recovery)
+ * 
+ * Note: Make sure to close any open connections before calling this function.
+ * If the database is blocked, you may need to close browser tabs using the extension.
+ */
+export async function resetListDatabase(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(DB_NAME)
+
+    request.onsuccess = () => {
+      console.log('[list-utilities] Database reset complete')
+      resolve()
+    }
+
+    request.onerror = () => {
+      reject(new Error(`Failed to reset database: ${request.error?.message}`))
+    }
+
+    request.onblocked = () => {
+      console.warn('[list-utilities] Database reset blocked - close all connections and try again')
+      // Don't reject here - the operation will eventually succeed when connections close
+    }
+  })
+}
+
 // ============================================================================
 // Query Operations
 // ============================================================================
@@ -546,6 +574,44 @@ export async function bulkCreateListEntries(entries: Omit<ListEntry, 'id'>[]): P
     if (entries.length === 0) {
       resolve([])
     }
+  })
+}
+
+/**
+ * Delete multiple list entries by ID in a single transaction
+ * More efficient than deleting entries one at a time
+ */
+export async function bulkDeleteListEntries(ids: number[]): Promise<void> {
+  if (ids.length === 0) {
+    return Promise.resolve()
+  }
+
+  const db = await getDatabase()
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite')
+    const store = transaction.objectStore(STORE_NAME)
+    let completed = 0
+
+    transaction.oncomplete = () => {
+      resolve()
+    }
+
+    transaction.onerror = () => {
+      reject(new Error(`Failed to delete entries (tx): ${transaction.error?.message}`))
+    }
+
+    ids.forEach((id) => {
+      const request = store.delete(id)
+
+      request.onsuccess = () => {
+        completed++
+      }
+
+      request.onerror = () => {
+        reject(new Error(`Failed to delete entry ${id}: ${request.error?.message}`))
+      }
+    })
   })
 }
 
@@ -696,8 +762,13 @@ export async function mergeBackendList(listName: string, entries: any[]): Promis
   console.log(`[list-utilities] Merging backend list: ${listName}`)
 
   // 1. Delete all existing 'backend' entries for this list
-  await deleteAllEntriesInList(listName, 'backend')
-  console.log(`[list-utilities] Cleared existing backend entries for: ${listName}`)
+  try {
+    await deleteAllEntriesInList(listName, 'backend')
+    console.log(`[list-utilities] Cleared existing backend entries for: ${listName}`)
+  } catch (error) {
+    console.error(`[list-utilities] Failed to clear backend entries for ${listName}:`, error)
+    throw error
+  }
 
   // 1b. Ensure uniqueness constraints won't fail when inserting backend entries.
   //
@@ -707,6 +778,10 @@ export async function mergeBackendList(listName: string, entries: any[]): Promis
   //
   // For backend-first sync, we resolve conflicts by removing any existing entry with the same
   // (list_name, pattern_type, domain) before inserting the backend-provided version.
+  //
+  // We batch these deletions to ensure they complete before bulk insert.
+  const entriesToDelete: number[] = []
+  
   for (const entry of entries) {
     try {
       const domain = entry?.domain
@@ -716,14 +791,25 @@ export async function mergeBackendList(listName: string, entries: any[]): Promis
 
       const existing = await findListEntryByPattern(listName, patternType, domain)
       if (existing?.id !== undefined) {
-        await deleteListEntry(existing.id)
+        entriesToDelete.push(existing.id)
         console.log(
-          `[list-utilities] Removed conflicting existing entry for ${listName}:${patternType}:${domain} ` +
-          `(source=${existing.source ?? 'unknown'})`
+          `[list-utilities] Found conflicting entry for ${listName}:${patternType}:${domain} ` +
+          `(source=${existing.source ?? 'unknown'}) - will delete`
         )
       }
     } catch (error) {
-      console.error(`[list-utilities] Failed resolving conflict for list ${listName}:`, error)
+      console.error(`[list-utilities] Failed checking conflict for list ${listName}:`, error)
+    }
+  }
+
+  // Delete all conflicting entries in a single transaction for atomicity
+  if (entriesToDelete.length > 0) {
+    try {
+      await bulkDeleteListEntries(entriesToDelete)
+      console.log(`[list-utilities] Deleted ${entriesToDelete.length} conflicting entries for ${listName}`)
+    } catch (error) {
+      console.error(`[list-utilities] Failed to delete conflicting entries:`, error)
+      throw new Error(`Failed to clear conflicts before sync: ${error instanceof Error ? error.message : 'unknown'}`)
     }
   }
 
