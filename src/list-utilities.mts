@@ -560,6 +560,7 @@ export async function bulkCreateListEntries(entries: Omit<ListEntry, 'id'>[]): P
     const store = transaction.objectStore(STORE_NAME)
     const ids: number[] = []
     let completed = 0
+    let skipped = 0
 
     entries.forEach((entry, index) => {
       const entryWithTimestamps = {
@@ -577,22 +578,41 @@ export async function bulkCreateListEntries(entries: Omit<ListEntry, 'id'>[]): P
         ids.push(request.result as number)
         completed++
 
-        if (completed === entries.length) {
+        if (completed + skipped === entries.length) {
+          if (skipped > 0) {
+            console.warn(`[list-utilities] Bulk insert completed with ${skipped} skipped duplicates`)
+          }
           resolve(ids)
         }
       }
 
-      request.onerror = () => {
-        const errorDetails = {
-          list_name: entry.list_name,
-          pattern_type: entry.pattern_type,
-          domain: entry.domain,
-          source: entry.source,
-          index,
-          error: request.error?.message
+      request.onerror = (event) => {
+        // Handle uniqueness constraint violations gracefully: skip the
+        // duplicate and continue.  This prevents transaction abort when a
+        // concurrent sync (or stale DB state) leaves a matching entry.
+        if (request.error?.name === 'ConstraintError') {
+          event.preventDefault() // Keep the transaction alive
+          skipped++
+          console.warn(
+            `[list-utilities] Skipping duplicate entry at index ${index} ` +
+            `(${entry.list_name}:${entry.pattern_type}:${entry.domain})`
+          )
+          if (completed + skipped === entries.length) {
+            console.warn(`[list-utilities] Bulk insert completed with ${skipped} skipped duplicates`)
+            resolve(ids)
+          }
+        } else {
+          const errorDetails = {
+            list_name: entry.list_name,
+            pattern_type: entry.pattern_type,
+            domain: entry.domain,
+            source: entry.source,
+            index,
+            error: request.error?.message
+          }
+          console.error('[list-utilities] Bulk insert failed at entry:', errorDetails)
+          reject(new Error(`Failed to create bulk entry at index ${index} (${entry.list_name}:${entry.pattern_type}:${entry.domain}): ${request.error?.message}`))
         }
-        console.error('[list-utilities] Bulk insert failed at entry:', errorDetails)
-        reject(new Error(`Failed to create bulk entry at index ${index} (${entry.list_name}:${entry.pattern_type}:${entry.domain}): ${request.error?.message}`))
       }
     })
 
